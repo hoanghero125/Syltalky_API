@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# Model weights (downloaded on server)
+app/checkpoints/
+app/pretrained_weight/
+.hf_cache/
+
+# ONNX cache (downloaded at runtime by rtmlib)
+app/rtmlib-main/*.onnx
+*.onnx
+
+# Env vars
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude
+.claude/
