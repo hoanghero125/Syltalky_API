@@ -59,6 +59,16 @@ def download():
         print(f"  {f}")
     print(f"Saved to {stt_dir}")
 
+    # 4. EnViT5 EN↔VI translation
+    translation_dir = APP_DIR / "translation" / "model"
+    translation_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Downloading EnViT5 translation model...")
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+    AutoTokenizer.from_pretrained("VietAI/envit5-translation").save_pretrained(str(translation_dir))
+    AutoModelForSeq2SeqLM.from_pretrained("VietAI/envit5-translation").save_pretrained(str(translation_dir))
+    print(f"Saved to {translation_dir}")
+
     print("\nDone.")
 
 

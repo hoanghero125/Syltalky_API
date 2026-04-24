@@ -14,8 +14,11 @@ env/
 venv/
 
 # Model weights (downloaded on server)
-app/checkpoints/
-app/pretrained_weight/
+app/sign/checkpoints/
+app/sign/pretrained_weight/
+app/stt/model/
+app/translation/model/
+app/tts/model/
 .hf_cache/
 
 # ONNX cache (downloaded at runtime by rtmlib)
