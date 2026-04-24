@@ -1,5 +1,5 @@
 """
-Run once on the server to download the OpenASL checkpoint and MT5 weights.
+Run once on the server to download all model weights.
 
     python download_model.py
 """
@@ -37,6 +37,27 @@ def download():
     T5Tokenizer.from_pretrained("google/mt5-base", legacy=False).save_pretrained(str(mt5_dir))
     MT5ForConditionalGeneration.from_pretrained("google/mt5-base").save_pretrained(str(mt5_dir))
     print(f"Saved to {mt5_dir}")
+
+    # 3. Zipformer RNNT STT (Vietnamese, int8 ONNX)
+    stt_dir = APP_DIR / "stt" / "model"
+    stt_dir.mkdir(parents=True, exist_ok=True)
+
+    stt_files = [
+        "encoder-epoch-20-avg-10.int8.onnx",
+        "decoder-epoch-20-avg-10.int8.onnx",
+        "joiner-epoch-20-avg-10.int8.onnx",
+        "bpe.model",
+    ]
+
+    print("Downloading Zipformer STT model...")
+    for f in stt_files:
+        hf_hub_download(
+            repo_id="hynt/Zipformer-30M-RNNT-6000h",
+            filename=f,
+            local_dir=str(stt_dir),
+        )
+        print(f"  {f}")
+    print(f"Saved to {stt_dir}")
 
     print("\nDone.")
 

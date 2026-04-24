@@ -1,16 +1,46 @@
 # Syltalky API
 
-AI service for sign language translation. Accepts a video of someone signing and returns an English translation.
-
-Built on top of [Uni-Sign](https://github.com/ZechengLi19/Uni-Sign) (ICLR 2025), using the OpenASL checkpoint (pose-only, ~97K clips).
+AI service layer for Syltalky — a real-time communication app for deaf people in online calls.
 
 ---
 
-## How it works
+## Concept
 
-1. Extracts 133 body/hand/face keypoints per frame using RTMPose (ONNX)
-2. Encodes the keypoint sequence through a Spatial-Temporal GCN
-3. Decodes to English text via MT5
+Syltalky bridges deaf and hearing people in a call. The deaf person signs via webcam; their signing is translated and spoken aloud to the hearing person. The hearing person speaks normally; their speech is transcribed as text for the deaf person to read.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        DEAF PERSON                          │
+│                                                             │
+│  [Webcam]                              [Screen / subtitles] │
+│     │                                          ▲            │
+│     ▼                                          │            │
+│  WS /ws/translate                       WS /ws/stt         │
+│  ASL → English                    Vietnamese speech → text  │
+│     │                                          │            │
+│     ▼                                          │            │
+│  EN → VI translation                    [Call audio in]     │
+│     │                                                       │
+│     ▼                                                       │
+│  WS /ws/tts                                                 │
+│  Vietnamese text → speech                                   │
+│     │                                                       │
+│     ▼                                                       │
+│  [Virtual mic → call output]                                │
+│                          HEARING PERSON hears Vietnamese    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Services
+
+| Service | Endpoint | Status | Model |
+|---|---|---|---|
+| Sign Language Translation | `WS /ws/translate` | ✅ Done | Uni-Sign (OpenASL, ICLR 2025) |
+| Speech-to-Text | `WS /ws/stt` | ✅ Done | Zipformer-30M-RNNT (6000h Vietnamese) |
+| EN → VI Translation | — | 🔜 Planned | — |
+| Text-to-Speech | `WS /ws/tts` | 🔜 Planned | TBD |
 
 ---
 
@@ -29,13 +59,13 @@ Built on top of [Uni-Sign](https://github.com/ZechengLi19/Uni-Sign) (ICLR 2025),
 conda create -n syltalky python=3.9 -y
 conda activate syltalky
 
-# 2. Install rtmlib
-pip install -e app/rtmlib-main
+# 2. Install rtmlib (keypoint extractor for sign translation)
+pip install -e app/sign/rtmlib-main
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Download model weights (~1.5 GB)
+# 4. Download all model weights
 python download_model.py
 
 # 5. Start the server
@@ -49,27 +79,27 @@ Server runs at `http://localhost:8000`.
 ## API
 
 ### `GET /health`
-Returns server status.
-
 ```json
 { "status": "ok" }
 ```
 
-### `POST /translate`
-Accepts a video file (MP4 or WebM) and returns the English translation.
+### `WS /ws/translate` — Sign Language Translation
+Real-time ASL → English translation.
 
-**Request:** `multipart/form-data` with field `video`
+- **Client sends:** raw JPEG frame bytes (~30fps from webcam)
+- **Server sends:** English text (every ~64 frames / ~2 seconds)
 
-**Response:**
-```json
-{ "translation": "I want to go to the store" }
-```
+### `WS /ws/stt` — Speech-to-Text
+Real-time Vietnamese speech transcription.
 
-**Example with curl:**
-```bash
-curl -X POST http://localhost:8000/translate \
-  -F "video=@signing.mp4"
-```
+- **Client sends:** raw float32 PCM audio chunks (16kHz mono)
+- **Server sends:** Vietnamese text continuously
+
+### `POST /stt` — Speech-to-Text (file upload)
+Transcribe an audio file (WAV/FLAC/MP3) to Vietnamese text.
+
+- **Request:** `multipart/form-data` with field `audio`
+- **Response:** `{ "text": "xin chào" }`
 
 ---
 
@@ -77,19 +107,27 @@ curl -X POST http://localhost:8000/translate \
 
 ```
 Syltalky_API/
-├── main.py               # Entry point
-├── download_model.py     # One-time model download
+├── main.py
+├── download_model.py
 ├── requirements.txt
+├── demo.html
 └── app/
-    ├── api.py            # FastAPI routes
-    ├── inference.py      # Translation pipeline
-    ├── models.py         # Uni-Sign model architecture
-    ├── datasets.py       # Data loading utilities
-    ├── config.py         # Path configuration
-    ├── utils.py          # Utilities
-    ├── deformable_attention_2d.py
-    ├── stgcn_layers/     # Spatial-Temporal GCN
-    └── rtmlib-main/      # RTMPose keypoint extractor
+    ├── api.py              ← root app, mounts all routers
+    ├── sign/               ← ASL → English (Uni-Sign)
+    │   ├── router.py
+    │   ├── inference.py
+    │   ├── models.py
+    │   ├── datasets.py
+    │   ├── config.py
+    │   ├── utils.py
+    │   ├── deformable_attention_2d.py
+    │   ├── stgcn_layers/
+    │   └── rtmlib-main/
+    ├── stt/                ← Vietnamese speech → text (Zipformer)
+    │   ├── router.py
+    │   └── inference.py
+    └── tts/                ← Vietnamese text → speech (planned)
+        └── router.py
 ```
 
 ---
@@ -97,4 +135,5 @@ Syltalky_API/
 ## Credits
 
 - [Uni-Sign](https://github.com/ZechengLi19/Uni-Sign) — Li et al., ICLR 2025
+- [Zipformer-30M-RNNT-6000h](https://huggingface.co/hynt/Zipformer-30M-RNNT-6000h) — hynt, VLSP 2025
 - [RTMPose](https://github.com/open-mmlab/mmpose) — MMPose team

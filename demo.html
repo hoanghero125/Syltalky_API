@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Syltalky — Live Sign Language Translation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f0f0f;
+      color: #f0f0f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1a1a1a;
+      aspect-ratio: 16/9;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror */
+    }
+
+    .status-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .status-badge.disconnected { background: #333; color: #888; }
+    .status-badge.connecting   { background: #2a2a00; color: #f5c400; }
+    .status-badge.live         { background: #003820; color: #00e676; }
+    .status-badge.error        { background: #2a0000; color: #ff5252; }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    #btn-start { background: #00e676; color: #000; }
+    #btn-stop  { background: #ff5252; color: #fff; }
+
+    .translation-box {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 20px 24px;
+      min-height: 100px;
+    }
+
+    .translation-label {
+      font-size: 0.75rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+
+    #translation-text {
+      font-size: 1.4rem;
+      font-weight: 500;
+      color: #f0f0f0;
+      line-height: 1.5;
+      min-height: 2em;
+    }
+
+    #translation-text.empty { color: #444; font-style: italic; font-size: 1rem; }
+
+    .history {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 16px 24px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .history-label {
+      font-size: 0.75rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+
+    .history-item {
+      font-size: 0.9rem;
+      color: #888;
+      padding: 4px 0;
+      border-bottom: 1px solid #222;
+    }
+
+    .history-item:last-child { border-bottom: none; }
+
+    .server-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #server-url {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #f0f0f0;
+      font-size: 0.9rem;
+    }
+
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Syltalky</h1>
+  <p class="subtitle">Live sign language translation</p>
+
+  <div class="container">
+
+    <div class="server-row">
+      <input id="server-url" type="text" value="ws://localhost:8000/ws/translate" />
+    </div>
+
+    <div class="video-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <span id="status-badge" class="status-badge disconnected">Disconnected</span>
+    </div>
+
+    <div class="controls">
+      <button id="btn-start">Start</button>
+      <button id="btn-stop" disabled>Stop</button>
+    </div>
+
+    <div class="translation-box">
+      <div class="translation-label">Translation</div>
+      <div id="translation-text" class="empty">Waiting for signing...</div>
+    </div>
+
+    <div class="history">
+      <div class="history-label">History</div>
+      <div id="history-list"></div>
+    </div>
+
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const video     = document.getElementById('video');
+    const canvas    = document.getElementById('canvas');
+    const ctx       = canvas.getContext('2d');
+    const badge     = document.getElementById('status-badge');
+    const btnStart  = document.getElementById('btn-start');
+    const btnStop   = document.getElementById('btn-stop');
+    const transText = document.getElementById('translation-text');
+    const histList  = document.getElementById('history-list');
+    const serverUrl = document.getElementById('server-url');
+
+    let ws        = null;
+    let stream    = null;
+    let frameLoop = null;
+    const FPS     = 30;
+
+    function setStatus(state, label) {
+      badge.className = `status-badge ${state}`;
+      badge.textContent = label;
+    }
+
+    function pushHistory(text) {
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.textContent = text;
+      histList.prepend(item);
+    }
+
+    function sendFrame() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        blob.arrayBuffer().then((buf) => ws.send(buf));
+      }, 'image/jpeg', 0.7);
+    }
+
+    async function start() {
+      // Get webcam
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (e) {
+        setStatus('error', 'Camera error');
+        return;
+      }
+
+      // Connect WebSocket
+      setStatus('connecting', 'Connecting...');
+      ws = new WebSocket(serverUrl.value.trim());
+
+      ws.onopen = () => {
+        setStatus('live', 'Live');
+        btnStart.disabled = true;
+        btnStop.disabled  = false;
+        frameLoop = setInterval(sendFrame, 1000 / FPS);
+      };
+
+      ws.onmessage = (e) => {
+        const text = e.data.trim();
+        if (!text) return;
+        transText.textContent = text;
+        transText.classList.remove('empty');
+        pushHistory(text);
+      };
+
+      ws.onerror = () => setStatus('error', 'Error');
+
+      ws.onclose = () => {
+        if (frameLoop) { clearInterval(frameLoop); frameLoop = null; }
+        setStatus('disconnected', 'Disconnected');
+        btnStart.disabled = false;
+        btnStop.disabled  = true;
+      };
+    }
+
+    function stop() {
+      if (frameLoop) { clearInterval(frameLoop); frameLoop = null; }
+      if (ws)        { ws.close(); ws = null; }
+      if (stream)    { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      video.srcObject = null;
+      setStatus('disconnected', 'Disconnected');
+      btnStart.disabled = false;
+      btnStop.disabled  = true;
+    }
+
+    btnStart.addEventListener('click', start);
+    btnStop.addEventListener('click', stop);
+  </script>
+</body>
+</html>
+```
