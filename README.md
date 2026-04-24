@@ -37,9 +37,8 @@ Syltalky bridges deaf and hearing people in a call. The deaf person signs via we
 
 | Service | Endpoint | Status | Model |
 |---|---|---|---|
-| Sign Language Translation | `WS /ws/translate` | ✅ Done | Uni-Sign (OpenASL, ICLR 2025) |
-| Speech-to-Text | `WS /ws/stt` | ✅ Done | Zipformer-30M-RNNT (6000h Vietnamese) |
-| EN → VI Translation | — | 🔜 Planned | — |
+| Sign Language Translation | `WS /ws/translate` | ✅ Done | Uni-Sign (OpenASL) + EnViT5 |
+| Speech-to-Text | `WS /ws/stt`, `POST /stt` | ✅ Done | Zipformer-30M-RNNT (6000h Vietnamese) |
 | Text-to-Speech | `WS /ws/tts` | 🔜 Planned | TBD |
 
 ---
@@ -84,10 +83,11 @@ Server runs at `http://localhost:8000`.
 ```
 
 ### `WS /ws/translate` — Sign Language Translation
-Real-time ASL → English translation.
+Real-time ASL → Vietnamese translation.
 
 - **Client sends:** raw JPEG frame bytes (~30fps from webcam)
-- **Server sends:** English text (every ~64 frames / ~2 seconds)
+- **Server sends:** Vietnamese text (every ~64 frames / ~2 seconds)
+- Internally: ASL → English (Uni-Sign) → Vietnamese (EnViT5)
 
 ### `WS /ws/stt` — Speech-to-Text
 Real-time Vietnamese speech transcription.
@@ -126,6 +126,8 @@ Syltalky_API/
     ├── stt/                ← Vietnamese speech → text (Zipformer)
     │   ├── router.py
     │   └── inference.py
+    ├── translation/        ← EN → VI (EnViT5, used internally by sign)
+    │   └── inference.py
     └── tts/                ← Vietnamese text → speech (planned)
         └── router.py
 ```
@@ -136,4 +138,5 @@ Syltalky_API/
 
 - [Uni-Sign](https://github.com/ZechengLi19/Uni-Sign) — Li et al., ICLR 2025
 - [Zipformer-30M-RNNT-6000h](https://huggingface.co/hynt/Zipformer-30M-RNNT-6000h) — hynt, VLSP 2025
+- [EnViT5](https://huggingface.co/VietAI/envit5-translation) — VietAI
 - [RTMPose](https://github.com/open-mmlab/mmpose) — MMPose team
