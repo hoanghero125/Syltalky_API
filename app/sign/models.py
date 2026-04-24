@@ -136,8 +136,8 @@ class Uni_Sign(nn.Module):
                     nn.init.constant_(layer.weight, 0)
                     nn.init.constant_(layer.bias, 0)
 
-        self.mt5_model = MT5ForConditionalGeneration.from_pretrained(mt5_path)
-        self.mt5_tokenizer = T5Tokenizer.from_pretrained(mt5_path, legacy=False)
+        self.mt5_model = MT5ForConditionalGeneration.from_pretrained(mt5_path, local_files_only=True)
+        self.mt5_tokenizer = T5Tokenizer.from_pretrained(mt5_path, legacy=False, local_files_only=True)
     
         
     def _init_weights(self, m):
