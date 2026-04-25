@@ -12,12 +12,12 @@ router = APIRouter()
 transcriber = SpeechTranscriber()
 executor = ThreadPoolExecutor(max_workers=2)
 
+SAMPLE_RATE = 16000
+
 
 @router.post("/stt")
 async def stt_file(audio: UploadFile = File(...)):
-    """
-    Transcribe an uploaded audio file (WAV/FLAC/MP3) to Vietnamese text.
-    """
+    """Transcribe an uploaded audio file (WAV/FLAC/MP3) to Vietnamese text."""
     try:
         data = await audio.read()
         samples, sr = sf.read(io.BytesIO(data), dtype="float32", always_2d=False)
@@ -34,31 +34,51 @@ async def stt_file(audio: UploadFile = File(...)):
 @router.websocket("/ws/stt")
 async def stt_stream(websocket: WebSocket):
     """
-    Real-time Vietnamese speech transcription from microphone.
+    Real-time Vietnamese speech transcription via VAD + offline ASR.
 
     Client sends: raw PCM float32 audio chunks (16kHz mono)
-    Server sends: transcribed Vietnamese text string
+    Server sends: transcribed Vietnamese text per detected speech segment
     """
     await websocket.accept()
 
     loop = asyncio.get_event_loop()
-    stream = transcriber.recognizer.create_stream()
-    SAMPLE_RATE = 16000
+    vad = transcriber.create_vad()
+    window_size = transcriber.vad_window_size
+    buffer = np.array([], dtype=np.float32)
 
     try:
         while True:
             data = await websocket.receive_bytes()
-
-            # data is raw float32 PCM bytes
             chunk = np.frombuffer(data, dtype=np.float32)
-            stream.accept_waveform(SAMPLE_RATE, chunk)
+            buffer = np.concatenate([buffer, chunk])
 
-            while transcriber.recognizer.is_ready(stream):
-                transcriber.recognizer.decode_stream(stream)
+            # Feed to VAD in fixed window_size chunks
+            while len(buffer) >= window_size:
+                vad.accept_waveform(buffer[:window_size])
+                buffer = buffer[window_size:]
 
-            result = transcriber.recognizer.get_result(stream).text.strip()
-            if result:
-                await websocket.send_text(result)
+            # Decode any completed speech segments
+            while not vad.empty():
+                segment = np.array(vad.front.samples, dtype=np.float32)
+                vad.pop()
+
+                text = await loop.run_in_executor(
+                    executor, transcriber.transcribe_segment, segment
+                )
+                if text:
+                    await websocket.send_text(text)
 
     except WebSocketDisconnect:
-        pass
+        # Flush remaining audio and send last segment if any
+        vad.flush()
+        while not vad.empty():
+            segment = np.array(vad.front.samples, dtype=np.float32)
+            vad.pop()
+            text = await loop.run_in_executor(
+                executor, transcriber.transcribe_segment, segment
+            )
+            if text:
+                try:
+                    await websocket.send_text(text)
+                except Exception:
+                    pass

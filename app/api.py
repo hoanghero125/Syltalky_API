@@ -9,7 +9,7 @@ from app.sign.router import router as sign_router
 from app.stt.router import router as stt_router
 from app.tts.router import router as tts_router
 
-app = FastAPI(title="Syltalky AI API")
+app = FastAPI(title="Syltalky API")
 
 app.add_middleware(
     CORSMiddleware,
