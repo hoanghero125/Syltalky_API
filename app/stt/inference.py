@@ -1,6 +1,9 @@
 import os
 import re
+import warnings
 import numpy as np
+
+warnings.filterwarnings("ignore", message="Asking to truncate to max_length")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -43,7 +46,7 @@ class SpeechTranscriber:
         self._vad_config = sherpa_onnx.VadModelConfig()
         self._vad_config.silero_vad.model = silero
         self._vad_config.silero_vad.threshold = 0.5
-        self._vad_config.silero_vad.min_silence_duration = 0.5
+        self._vad_config.silero_vad.min_silence_duration = 2.0
         self._vad_config.silero_vad.min_speech_duration = 0.25
         self._vad_config.sample_rate = 16000
         self.vad_window_size = self._vad_config.silero_vad.window_size
@@ -58,6 +61,7 @@ class SpeechTranscriber:
             aggregation_strategy="simple",
             device=0,
         )
+        self.ner.tokenizer.model_max_length = 512
 
         print("[stt] Ready.")
 

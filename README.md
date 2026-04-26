@@ -1,52 +1,26 @@
 # Syltalky API
 
-AI service layer for Syltalky — a real-time communication app for deaf people in online calls.
-
----
-
-## Concept
-
-Syltalky bridges deaf and hearing people in a call. The deaf person signs via webcam; their signing is translated and spoken aloud to the hearing person. The hearing person speaks normally; their speech is transcribed as text for the deaf person to read.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        DEAF PERSON                          │
-│                                                             │
-│  [Webcam]                              [Screen / subtitles] │
-│     │                                          ▲            │
-│     ▼                                          │            │
-│  WS /ws/translate                       WS /ws/stt         │
-│  ASL → English                    Vietnamese speech → text  │
-│     │                                          │            │
-│     ▼                                          │            │
-│  EN → VI translation                    [Call audio in]     │
-│     │                                                       │
-│     ▼                                                       │
-│  WS /ws/tts                                                 │
-│  Vietnamese text → speech                                   │
-│     │                                                       │
-│     ▼                                                       │
-│  [Virtual mic → call output]                                │
-│                          HEARING PERSON hears Vietnamese    │
-└─────────────────────────────────────────────────────────────┘
-```
+AI services for Syltalky.
 
 ---
 
 ## Services
 
-| Service | Endpoint | Status | Model |
+| Endpoint | Method | Model | Description |
 |---|---|---|---|
-| Sign Language Translation | `WS /ws/translate` | ✅ Done | Uni-Sign (OpenASL) + EnViT5 |
-| Speech-to-Text | `WS /ws/stt`, `POST /stt` | ✅ Done | Zipformer-30M-RNNT (6000h Vietnamese) + Silero VAD |
-| Text-to-Speech | `WS /ws/tts` | 🔜 Planned | TBD |
+| `/sign` | POST | Uni-Sign + EnViT5 | ASL video → Vietnamese text |
+| `/ws/stt` | WebSocket | Zipformer-RNNT + Silero VAD | Streaming speech → Vietnamese text |
+| `/stt` | POST | Zipformer-RNNT + Silero VAD | Audio file → Vietnamese text |
+| `/tts/voice` | POST | OmniVoice + HiggsAudio | Register a cloned voice, get `voice_id` |
+| `/tts/synthesize` | POST | OmniVoice | Synthesize speech with a cloned voice |
+| `/tts/design` | POST | OmniVoice | Synthesize speech with a designed voice |
 
 ---
 
 ## Requirements
 
-- Python 3.9
-- CUDA-capable GPU (4GB+ VRAM)
+- Python 3.11
+- CUDA 12.6–12.8 capable GPU (8 GB+ VRAM recommended)
 - conda
 
 ---
@@ -55,60 +29,181 @@ Syltalky bridges deaf and hearing people in a call. The deaf person signs via we
 
 ```bash
 # 1. Create conda environment
-conda create -n syltalky python=3.9 -y
-conda activate syltalky
+conda create -n syltalky-api python=3.11 -y
+conda activate syltalky-api
 
-# 2. Install rtmlib (keypoint extractor for sign translation)
-pip install -e app/sign/rtmlib-main
-
-# 3. Install dependencies
+# 2. Install dependencies (includes local rtmlib and omnivoice packages)
 pip install -r requirements.txt
 
-# 4. Download all model weights
-python download_model.py
-
-# 5. Start the server
+# 3. Start the server (downloads missing models automatically on first run)
 python main.py
 ```
 
-Server runs at `http://localhost:8000`.
+Server runs at `http://localhost:8000`. Interactive API docs at `http://localhost:8000/docs`.
 
 ---
 
 ## API
 
 ### `GET /health`
+
 ```json
 { "status": "ok" }
 ```
 
-### `WS /ws/translate` — Sign Language Translation
-Real-time ASL → Vietnamese translation.
+---
 
-- **Client sends:** raw JPEG frame bytes (~30fps from webcam)
-- **Server sends:** Vietnamese text (every ~64 frames / ~2 seconds)
-- Internally: ASL → English (Uni-Sign) → Vietnamese (EnViT5)
+### `POST /sign` — Sign Language → Vietnamese
 
-### `WS /ws/stt` — Speech-to-Text
-Real-time Vietnamese speech transcription via VAD-segmented offline ASR.
+Upload a recorded ASL video and receive Vietnamese text.
 
-- **Client sends:** raw float32 PCM audio chunks (16kHz mono)
-- **Server sends:** Vietnamese text per detected speech segment (~1–2s latency)
-- Internally: Silero VAD detects speech boundaries → Zipformer-RNNT transcribes each segment → post-processing
+**Request:** `multipart/form-data`
 
-### `POST /stt` — Speech-to-Text (file upload)
-Transcribe an audio file (WAV/FLAC/MP3) to Vietnamese text.
-
-- **Request:** `multipart/form-data` with field `audio`
-- **Response:** `{ "text": "Xin chào, tôi tên là Hoàng." }`
-
-The STT output goes through a three-stage post-processing pipeline:
-
-| Stage | Input | Output |
+| Field | Type | Description |
 |---|---|---|
-| Punctuation restoration | `xin chào tôi tên là hoàng` | `xin chào, tôi tên là hoàng.` |
-| NER capitalization | `xin chào, tôi tên là hoàng.` | `xin chào, tôi tên là Hoàng.` |
-| Sentence capitalization | `xin chào, tôi tên là Hoàng.` | `Xin chào, tôi tên là Hoàng.` |
+| `video` | file | MP4, WebM, AVI, or MOV |
+
+**Response:**
+```json
+{ "text": "Xin chào" }
+```
+
+**Notes:**
+- Minimum 32 frames (~1s at 30fps)
+- Pipeline: RTMPose keypoint extraction → Uni-Sign (ASL → EN) → EnViT5 (EN → VI)
+
+---
+
+### `WS /ws/stt` — Speech → Text (streaming)
+
+Real-time Vietnamese speech transcription. Connect via WebSocket and stream raw audio.
+
+**Client sends:** raw `float32` PCM chunks — 16 kHz, mono
+
+**Server sends:** Vietnamese text string per detected speech segment (VAD-segmented)
+
+---
+
+### `POST /stt` — Speech → Text (file)
+
+Transcribe an audio file to Vietnamese text.
+
+**Request:** `multipart/form-data`
+
+| Field | Type | Description |
+|---|---|---|
+| `audio` | file | WAV, FLAC, or MP3 |
+
+**Response:**
+```json
+{ "text": "Xin chào, tôi tên là Hoàng." }
+```
+
+**Post-processing pipeline:**
+
+| Stage | Example |
+|---|---|
+| Raw ASR | `xin chào tôi tên là hoàng` |
+| Punctuation | `xin chào, tôi tên là hoàng.` |
+| NER capitalization | `xin chào, tôi tên là Hoàng.` |
+| Sentence capitalization | `Xin chào, tôi tên là Hoàng.` |
+
+---
+
+### `POST /tts/voice` — Register a Cloned Voice
+
+Upload a reference audio clip and its transcript to create a reusable voice. The audio is tokenized once and stored in memory. The returned `voice_id` is passed to `POST /tts/synthesize`.
+
+**Intended pipeline (backend handles step 1):**
+```
+1. POST /stt  (ref audio)  →  transcript
+2. POST /tts/voice  (ref audio + transcript)  →  voice_id
+3. POST /tts/synthesize  (voice_id + text)  →  WAV   ← repeat as needed
+```
+
+**Request:** `multipart/form-data`
+
+| Field | Type | Description |
+|---|---|---|
+| `ref_audio` | file | WAV recommended — 5–15s of clear speech, no background noise |
+| `ref_text` | string | Exact transcript of what is spoken in `ref_audio` |
+
+**Response:**
+```json
+{
+  "voice_id": "3f2a1b4c-...",
+  "transcript": "Xin chào, tôi tên là Hoàng."
+}
+```
+
+**Notes:**
+- `voice_id` persists in memory until the server restarts
+- The backend is responsible for storing `voice_id` per user and re-registering if the server restarts
+- Reference audio longer than 20s will produce a warning and may reduce quality — trim to 15s or under for best results
+
+---
+
+### `POST /tts/synthesize` — Synthesize with Cloned Voice
+
+Synthesize Vietnamese text using a voice previously registered with `POST /tts/voice`. The reference audio is never re-processed — this goes straight to the diffusion step.
+
+**Request:** `application/json`
+
+```json
+{
+  "voice_id": "3f2a1b4c-...",
+  "text": "Hôm nay trời đẹp quá.",
+  "num_step": 32,
+  "speed": 1.0
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `voice_id` | string | required | ID returned by `POST /tts/voice` |
+| `text` | string | required | Vietnamese text to synthesize |
+| `num_step` | int | 32 | Diffusion steps (1–128). Higher = better quality, slower |
+| `speed` | float | 1.0 | Playback speed (0.5–2.0) |
+
+**Response:** `audio/wav`
+
+---
+
+### `POST /tts/design` — Synthesize with Designed Voice
+
+Synthesize Vietnamese text using a voice described by comma-separated style tags. No reference audio needed.
+
+**Request:** `application/json`
+
+```json
+{
+  "text": "Xin chào, rất vui được gặp bạn.",
+  "instruct": "female, young adult, high pitch",
+  "num_step": 32,
+  "speed": 1.0
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `text` | string | required | Vietnamese text to synthesize |
+| `instruct` | string | required | Comma-separated style tags (see table below) |
+| `num_step` | int | 32 | Diffusion steps (1–128) |
+| `speed` | float | 1.0 | Playback speed (0.5–2.0) |
+
+**Valid tags:**
+
+| Category | Tags |
+|---|---|
+| Gender | `female` · `male` |
+| Age | `child` · `teenager` · `young adult` · `middle-aged` · `elderly` |
+| Pitch | `very low pitch` · `low pitch` · `moderate pitch` · `high pitch` · `very high pitch` |
+| Style | `whisper` |
+| Accent | `american accent` · `australian accent` · `british accent` · `canadian accent` · `chinese accent` · `indian accent` · `japanese accent` · `korean accent` · `portuguese accent` · `russian accent` |
+
+Combine tags freely, one per category: `"female, young adult, high pitch, british accent"`
+
+**Response:** `audio/wav`
 
 ---
 
@@ -116,33 +211,32 @@ The STT output goes through a three-stage post-processing pipeline:
 
 ```
 Syltalky_API/
-├── main.py                 ← sets HF_HOME before any import
-├── download_model.py
+├── main.py                 ← sets HF_HOME before any import, starts uvicorn
+├── download_model.py       ← downloads all models (called automatically by main.py)
 ├── requirements.txt
-├── demo.html
+├── demo.html               ← browser demo (sign + STT + TTS)
 └── app/
-    ├── api.py              ← root app, mounts all routers
-    ├── sign/               ← ASL → English (Uni-Sign)
-    │   ├── router.py
+    ├── api.py              ← FastAPI app, mounts all routers
+    ├── sign/               ← ASL → Vietnamese (Uni-Sign + RTMPose + EnViT5)
+    │   ├── router.py       ← POST /sign
     │   ├── inference.py
-    │   ├── models.py
-    │   ├── datasets.py
-    │   ├── config.py
-    │   ├── utils.py
-    │   ├── deformable_attention_2d.py
-    │   ├── stgcn_layers/
-    │   ├── rtmlib-main/
-    │   ├── checkpoints/            ← openasl_pose_only_slt.pth
-    │   └── pretrained_weight/      ← mt5-base/
-    ├── stt/                ← Vietnamese speech → text (Zipformer + VAD)
-    │   ├── router.py
+    │   ├── rtmlib-main/    ← bundled rtmlib (pip install -e)
+    │   ├── checkpoints/    ← openasl_pose_only_slt.pth (gitignored)
+    │   └── pretrained_weight/ ← mt5-base/ (gitignored)
+    ├── stt/                ← Vietnamese speech → text
+    │   ├── router.py       ← POST /stt, WS /ws/stt
     │   ├── inference.py
-    │   ├── model/                  ← ONNX encoder/decoder/joiner + bpe.model + tokens.txt + silero_vad.onnx
-    │   └── .hf_cache/              ← HF model cache (punctuation + NER models)
+    │   ├── model/          ← Zipformer ONNX + bpe.model + silero_vad.onnx (gitignored)
+    │   └── .hf_cache/      ← HF cache for punct + NER models (gitignored)
     ├── translation/        ← EN → VI (EnViT5, used internally by sign)
-    │   └── inference.py
-    └── tts/                ← Vietnamese text → speech (planned)
-        └── router.py
+    │   ├── inference.py
+    │   └── model/          ← EnViT5 weights (gitignored)
+    └── tts/                ← Vietnamese text → speech (OmniVoice)
+        ├── router.py       ← POST /tts/voice, /tts/synthesize, /tts/design
+        ├── inference.py
+        ├── omnivoice/      ← bundled OmniVoice source (pip install -e)
+        ├── speakers/       ← preset speaker ref audio (reserved)
+        └── checkpoints/    ← omnivoice-vietnamese weights (gitignored)
 ```
 
 ---
@@ -150,9 +244,11 @@ Syltalky_API/
 ## Credits
 
 - [Uni-Sign](https://github.com/ZechengLi19/Uni-Sign) — Li et al., ICLR 2025
+- [OmniVoice](https://github.com/k2-fsa/OmniVoice) — k2-fsa / splendor1811
 - [Zipformer-30M-RNNT-6000h](https://huggingface.co/hynt/Zipformer-30M-RNNT-6000h) — hynt, VLSP 2025
 - [EnViT5](https://huggingface.co/VietAI/envit5-translation) — VietAI
-- [RTMPose](https://github.com/open-mmlab/mmpose) — MMPose team
+- [RTMPose / rtmlib](https://github.com/Tau-J/rtmlib) — Tau-J
 - [fullstop-punctuation-multilang-large](https://huggingface.co/oliverguhr/fullstop-punctuation-multilang-large) — Oliver Guhr
 - [ner-vietnamese-electra-base](https://huggingface.co/NlpHUST/ner-vietnamese-electra-base) — NlpHUST
 - [Silero VAD](https://github.com/snakers4/silero-vad) — snakers4 (via sherpa-onnx)
+- [HiggsAudio v2 Tokenizer](https://huggingface.co/eustlb/higgs-audio-v2-tokenizer) — eustlb

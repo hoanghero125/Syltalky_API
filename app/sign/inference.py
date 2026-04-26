@@ -3,15 +3,13 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(HERE, "rtmlib-main"))
+sys.path.insert(0, HERE)  # for Uni-Sign modules (config, models, datasets, utils)
 
 import config as uni_config
 uni_config.mt5_path = os.path.join(HERE, "pretrained_weight", "mt5-base")
 
 import torch
 import numpy as np
-from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 from rtmlib import Wholebody
 from models import Uni_Sign
@@ -90,10 +88,6 @@ class SignTranslator:
                 output = self.model.generate(stack_out, max_new_tokens=100, num_beams=4)
 
                 tokenizer = self.model.mt5_tokenizer
-                pad_id = tokenizer.eos_token_id
-                pad_tensor = torch.ones(150 - len(output[0])) * pad_id
-                output[0] = torch.cat((output[0], pad_tensor.long()), dim=0)
-                output = pad_sequence(output, batch_first=True, padding_value=pad_id)
                 return tokenizer.batch_decode(output, skip_special_tokens=True)[0]
 
         return ""

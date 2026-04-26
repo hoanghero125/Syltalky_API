@@ -1,0 +1,49 @@
+{
+  "speakers": [
+    {
+      "id": "speaker_01",
+      "name": "Linh (Nữ miền Bắc)",
+      "gender": "female",
+      "region": "North",
+      "description": "Giọng nữ miền Bắc, thanh thoát, phù hợp đọc truyện.",
+      "ref_audio": "assets/speakers/speaker_01/ref.wav",
+      "ref_text": "Đó là để đối mặt với thế giới lạnh lùng, tàn khốc này, chứ không phải là để phàn nàn về cái thời đại khoan dung vĩ đại đó."
+    },
+    {
+      "id": "speaker_02",
+      "name": "Hương (Nữ miền Bắc)",
+      "gender": "female",
+      "region": "North",
+      "description": "Giọng nữ miền Bắc, trầm ấm, phù hợp đọc tin tức.",
+      "ref_audio": "assets/speakers/speaker_02/ref.wav",
+      "ref_text": "CTiếp đến là mỗi người sẽ được 1 bát súp miso."
+    },
+    {
+      "id": "speaker_03",
+      "name": "Mai (Nữ miền Nam)",
+      "gender": "female",
+      "region": "South",
+      "description": "Giọng nữ miền Nam, ngọt ngào, truyền cảm.",
+      "ref_audio": "assets/speakers/speaker_03/ref.wav",
+      "ref_text": "Thời tiết là những gì xảy ra trong mỗi ngày, nó bao gồm nhiệt độ, khả năng mưa, tốc độ gió và một số yếu tố khác như áp suất không khí còn khí hậu là hệ thống thời tiết trong một thời gian dài"
+    },
+    {
+      "id": "speaker_04",
+      "name": "Hà (Nữ miền Bắc)",
+      "gender": "female",
+      "region": "North",
+      "description": "Giọng nữ miền Bắc, ngọt ngào, truyền cảm.",
+      "ref_audio": "assets/speakers/speaker_04/ref.wav",
+      "ref_text": "Tôi có một câu hỏi dành cho bạn, bạn có muốn được hạnh phúc, khỏe mạnh, nổi tiếng và giàu có không, đa số câu trả lời đều là có"
+    },
+    {
+      "id": "speaker_05",
+      "name": "Linh 2 (Nữ miền Bắc) (0.8)",
+      "gender": "female",
+      "region": "North",
+      "description": "Giọng nữ miền Bắc, ngọt ngào, truyền cảm.",
+      "ref_audio": "assets/speakers/speaker_05/ref.wav",
+      "ref_text": "Em là người con đến từ xứ Huế mộng mơ. Nơi đây nức tiếng gần xa với những kiến trúc cung đình Huế cùng lăng tẩm của các vị vua triều Nguyễn. Ngoài ra, quê hương em còn khiến du khách yêu mến với rất nhiều các món ăn ngon và sự hiếu khách, nhiệt tình."
+    }
+  ]
+}

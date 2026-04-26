@@ -19,10 +19,13 @@ app/sign/pretrained_weight/
 app/stt/model/
 app/translation/model/
 app/tts/model/
+app/tts/checkpoints/
 .hf_cache/
 
-# ONNX cache (downloaded at runtime by rtmlib)
-app/rtmlib-main/*.onnx
+# Debug/scratch files
+pose_debug.html
+
+# ONNX cache
 *.onnx
 
 # Env vars

@@ -9,10 +9,10 @@ MODEL_DIR = os.environ.get(
 
 class Translator:
     def __init__(self):
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        from transformers import PreTrainedTokenizerFast, AutoModelForSeq2SeqLM
 
         print("[translation] Loading EnViT5...")
-        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+        self.tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_DIR)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_DIR)
         self.model.eval()
         self.model.cuda()
@@ -22,4 +22,7 @@ class Translator:
         inputs = self.tokenizer(f"en: {text}", return_tensors="pt", padding=True).input_ids.cuda()
         with torch.no_grad():
             output = self.model.generate(inputs, max_length=512)
-        return self.tokenizer.decode(output[0], skip_special_tokens=True)
+        result = self.tokenizer.decode(output[0], skip_special_tokens=True)
+        if result.startswith("vi: "):
+            result = result[4:]
+        return result

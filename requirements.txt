@@ -1,21 +1,38 @@
+# PyTorch — cu126 build is forward-compatible with a CUDA 12.8 driver
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.7.1+cu126
+torchvision==0.22.1+cu126
+torchaudio==2.7.1+cu126
+
+# Web
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
 
-torch>=2.2.0
-torchvision>=0.17.0
-transformers>=4.38.0
+# ML
+transformers>=5.3.0
+accelerate
 sentencepiece>=0.2.0
 einops>=0.7.0
 
+# Vision / ONNX
 onnxruntime-gpu>=1.17.0
 opencv-python>=4.9.0
 numpy>=1.24.0
 decord>=0.6.0
 Pillow>=10.0.0
 
+# HuggingFace
 huggingface_hub>=0.22.0
 
 # STT
 sherpa-onnx
 soundfile
+
+# Local packages (bundled source — no network needed)
+-e ./app/sign/rtmlib-main
+-e ./app/tts
+
+# TTS extras
+pydub
+deepmultilingualpunctuation

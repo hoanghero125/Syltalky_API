@@ -1,10 +1,11 @@
 import asyncio
+import re
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
-import numpy as np
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.sign.inference import SignTranslator
 from app.translation.inference import Translator
 
@@ -13,58 +14,57 @@ sign_translator = SignTranslator()
 translator = Translator()
 executor = ThreadPoolExecutor(max_workers=2)
 
-CHUNK_FRAMES = 64
-OVERLAP_FRAMES = 16
+_MIN_SIGN_FRAMES = 32
+_SPEAKER_RE = re.compile(r'^[A-Z][A-Za-z\s\'.]+:\s*')
+_BRACKET_RE = re.compile(r'\[.*?\]', re.DOTALL)
 
 
-def _translate_pipeline(pose_data: dict) -> str:
+def _translate_pipeline(pose_data):
     english = sign_translator.translate(pose_data)
-    vietnamese = translator.en_to_vi(english)
-    return vietnamese
+    english = _BRACKET_RE.sub('', english)
+    english = _SPEAKER_RE.sub('', english).strip()
+    if not english:
+        return ''
+    return translator.en_to_vi(english)
 
 
-@router.websocket("/ws/translate")
-async def websocket_translate(websocket: WebSocket):
-    """
-    Real-time sign language translation from webcam frames.
-
-    Client sends: raw JPEG frame bytes
-    Server sends: Vietnamese text string
-    """
-    await websocket.accept()
-
-    keypoints_buf = []
-    scores_buf = []
-    loop = asyncio.get_event_loop()
-
+@router.post("/sign")
+async def sign_translate_file(video: UploadFile = File(...)):
+    """Translate an uploaded ASL video file (MP4, WebM, AVI, MOV) to Vietnamese."""
+    import tempfile
     try:
+        data = await video.read()
+        ext = ".webm" if "webm" in (video.content_type or "") else ".mp4"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+            f.write(data)
+            tmp_path = f.name
+
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video file")
+
+        pose_data = {"keypoints": [], "scores": []}
         while True:
-            data = await websocket.receive_bytes()
+            ret, frame = cap.read()
+            if not ret:
+                break
+            kpts, scores = sign_translator.extract_keypoints(frame)
+            pose_data["keypoints"].append(kpts)
+            pose_data["scores"].append(scores)
+        cap.release()
+        os.unlink(tmp_path)
 
-            frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-            if frame is None:
-                continue
-
-            kpts, scores = await loop.run_in_executor(
-                executor, sign_translator.extract_keypoints, frame
+        if len(pose_data["keypoints"]) < _MIN_SIGN_FRAMES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Video too short (need at least {_MIN_SIGN_FRAMES} frames)"
             )
-            keypoints_buf.append(kpts)
-            scores_buf.append(scores)
 
-            if len(keypoints_buf) >= CHUNK_FRAMES:
-                pose_data = {
-                    "keypoints": list(keypoints_buf),
-                    "scores": list(scores_buf),
-                }
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(executor, _translate_pipeline, pose_data)
+        return {"text": result or "No translation produced"}
 
-                result = await loop.run_in_executor(
-                    executor, _translate_pipeline, pose_data
-                )
-
-                await websocket.send_text(result)
-
-                keypoints_buf = keypoints_buf[CHUNK_FRAMES - OVERLAP_FRAMES:]
-                scores_buf = scores_buf[CHUNK_FRAMES - OVERLAP_FRAMES:]
-
-    except WebSocketDisconnect:
-        pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
