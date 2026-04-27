@@ -1,0 +1,15 @@
+services:
+  ai-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped

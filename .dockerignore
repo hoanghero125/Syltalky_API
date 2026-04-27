@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.claude
+uploads/
+app/stt/.hf_cache/
