@@ -1,6 +1,6 @@
-# Syltalky API
+# Syltalky AI API
 
-AI services for Syltalky.
+GPU-accelerated AI services for Syltalky: Vietnamese speech recognition, voice cloning, voice synthesis, and sign language translation.
 
 ---
 
@@ -21,11 +21,22 @@ AI services for Syltalky.
 
 - Python 3.11
 - CUDA 12.6–12.8 capable GPU (8 GB+ VRAM recommended)
-- conda
+- NVIDIA driver ≥ 525 (forward-compatible with CUDA 12.8)
+- conda (for local dev) or Docker with `nvidia-container-toolkit` (for Docker)
 
 ---
 
 ## Setup
+
+### Docker (recommended)
+
+```bash
+docker compose up -d
+```
+
+Requires `nvidia-container-toolkit`. The container uses `pytorch/pytorch:2.7.1-cuda12.6-cudnn9-runtime` as base. Models are downloaded into the container on first start.
+
+### Local (conda)
 
 ```bash
 # 1. Create conda environment
@@ -40,6 +51,10 @@ python main.py
 ```
 
 Server runs at `http://localhost:8000`. Interactive API docs at `http://localhost:8000/docs`.
+
+### Model download
+
+`main.py` calls `download_model.py` automatically before starting uvicorn. Models are large (~several GB) and are gitignored — they live in `app/stt/model/`, `app/sign/checkpoints/`, `app/sign/pretrained_weight/`, `app/translation/model/`, and `app/tts/checkpoints/`.
 
 ---
 

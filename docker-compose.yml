@@ -1,6 +1,7 @@
 services:
   ai-api:
     build: .
+    runtime: nvidia
     ports:
       - "8000:8000"
     volumes:
